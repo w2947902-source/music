@@ -9,6 +9,7 @@ export interface AudioSnapshot {
   track?: Track;
   volume: number;
   playingIntent: boolean;
+  autoplayBlocked: boolean;
   message?: string;
 }
 interface Voice {
@@ -31,6 +32,7 @@ const INITIAL: AudioSnapshot = {
   end: 0,
   volume: 0.7,
   playingIntent: false,
+  autoplayBlocked: false,
 };
 
 /** One manager per listening room; no audio element is owned by an animated view. */
@@ -47,6 +49,12 @@ export class AudioManager {
   private context?: AudioContext;
   private disposed = false;
   private tick?: ReturnType<typeof setInterval>;
+  private initial: AudioSnapshot;
+  constructor({ autoplay = false }: { autoplay?: boolean } = {}) {
+    this.desiredPlaying = autoplay;
+    this.initial = { ...INITIAL, playingIntent: autoplay };
+    this.state = this.initial;
+  }
   subscribe = (callback: () => void) => {
     this.listeners.add(callback);
     return () => {
@@ -54,7 +62,7 @@ export class AudioManager {
     };
   };
   getSnapshot = () => this.state;
-  getServerSnapshot = () => INITIAL;
+  getServerSnapshot = () => this.initial;
   private publish(update: Partial<AudioSnapshot>) {
     this.state = { ...this.state, ...update };
     this.listeners.forEach((callback) => callback());
@@ -128,18 +136,21 @@ export class AudioManager {
       this.active = undefined;
       this.fade();
       this.publish({
-        status: "unavailable",
-        playingIntent: false,
+        status: album ? "unavailable" : "idle",
+        playingIntent: album ? false : this.desiredPlaying,
+        autoplayBlocked: false,
         track,
         currentTime: 0,
         start: 0,
         end: 0,
-        message: "这张唱片还没有声音。",
+        message: album ? "这张唱片还没有声音。" : undefined,
       });
       return;
     }
     this.publish({
       status: "loading",
+      playingIntent: this.desiredPlaying,
+      autoplayBlocked: false,
       track,
       currentTime: clip?.start ?? 0,
       start: clip?.start ?? 0,
@@ -250,11 +261,15 @@ export class AudioManager {
         audio.removeEventListener("ended", loop);
         audio.removeEventListener("error", failed);
       };
+      let autoplayBlocked = false;
       if (this.desiredPlaying) {
         try {
           await audio.play();
         } catch (cause) {
-          if (this.desiredPlaying) throw cause;
+          if (this.desiredPlaying) {
+            if ((cause as { name?: string })?.name === "NotAllowedError") autoplayBlocked = true;
+            else throw cause;
+          }
         }
       }
       if (generation !== this.generation || this.disposed) {
@@ -265,13 +280,15 @@ export class AudioManager {
       this.active = voice;
       if (!this.desiredPlaying) audio.pause();
       this.publish({
-        status: this.desiredPlaying ? "playing" : "paused",
+        status: this.desiredPlaying && !autoplayBlocked ? "playing" : "paused",
         playingIntent: this.desiredPlaying,
+        autoplayBlocked,
+        message: autoplayBlocked ? "点击页面即可开始播放。" : undefined,
         start: voice.start,
         end: voice.end,
         currentTime: voice.start,
       });
-      if (this.desiredPlaying) this.fade(voice);
+      if (this.desiredPlaying && !autoplayBlocked) this.fade(voice);
       else {
         for (const old of [...this.voices])
           if (old !== voice) this.release(old);
@@ -292,16 +309,17 @@ export class AudioManager {
       this.publish({
         status: "error",
         playingIntent: false,
+        autoplayBlocked: false,
         message: cause instanceof Error ? cause.message : "音频加载失败。",
       });
     }
   }
   async play() {
-    if (!this.active || this.state.status === "loading") return;
+    if (this.disposed) return;
+    this.desiredPlaying = true;
+    this.publish({ playingIntent: true, autoplayBlocked: false });
     const generation = this.generation;
     const voice = this.active;
-    this.desiredPlaying = true;
-    this.publish({ playingIntent: true });
     try {
       if (!this.context) {
         try {
@@ -312,6 +330,10 @@ export class AudioManager {
         }
       }
       const resume = this.context?.resume();
+      if (!voice || this.state.status === "loading") {
+        await resume?.catch(() => {});
+        return;
+      }
       const playback = voice.audio.play();
       await Promise.all([resume, playback]);
       if (
@@ -322,14 +344,16 @@ export class AudioManager {
         return;
       this.fade(voice);
       this.publish({ status: "playing", message: undefined });
-    } catch {
+    } catch (cause) {
       if (generation !== this.generation || !this.desiredPlaying) return;
-      this.desiredPlaying = false;
-      voice.audio.pause();
+      const blocked = (cause as { name?: string })?.name === "NotAllowedError";
+      if (!blocked) this.desiredPlaying = false;
+      voice?.audio.pause();
       this.publish({
         status: "paused",
-        playingIntent: false,
-        message: "请点击 Start Listening 以允许播放。",
+        playingIntent: this.desiredPlaying,
+        autoplayBlocked: blocked,
+        message: "点击页面或播放按钮即可开始播放。",
       });
     }
   }
@@ -343,7 +367,7 @@ export class AudioManager {
       voice.audio.pause();
       if (voice !== this.active && voice.ready) this.release(voice);
     }
-    this.publish({ playingIntent: false });
+    this.publish({ playingIntent: false, autoplayBlocked: false, message: undefined });
     if (this.active) {
       this.setVoiceVolume(this.active, this.state.volume);
       if (this.state.status !== "loading") this.publish({ status: "paused" });

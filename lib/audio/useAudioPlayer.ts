@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { Album } from "@/types/album";
 import { AudioManager } from "./AudioManager";
 export function useAudioPlayer(album?: Album) {
-  const [manager] = useState(() => new AudioManager());
+  const [manager] = useState(() => new AudioManager({ autoplay: true }));
   const state = useSyncExternalStore(
     manager.subscribe,
     manager.getSnapshot,

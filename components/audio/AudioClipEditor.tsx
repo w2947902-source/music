@@ -13,6 +13,7 @@ export function AudioClipEditor({
   initialClip,
   onConfirm,
   onDirty,
+  onRangeChange,
   disabled,
   peaks,
 }: {
@@ -20,6 +21,7 @@ export function AudioClipEditor({
   initialClip?: AudioClip;
   onConfirm: (clip: AudioClip) => Promise<void>;
   onDirty: () => void;
+  onRangeChange?: (clip: AudioClip) => void;
   disabled?: boolean;
   peaks?: number[][];
 }) {
@@ -42,6 +44,9 @@ export function AudioClipEditor({
   useEffect(() => {
     callbacks.current = { onDirty, onConfirm };
   }, [onDirty, onConfirm]);
+  useEffect(() => {
+    onRangeChange?.({trackId:track.id,start,end});
+  }, [track.id,start,end,onRangeChange]);
   const dirty = useCallback(() => {
     setConfirmed(false);
     callbacks.current.onDirty();
@@ -161,7 +166,7 @@ export function AudioClipEditor({
         <span>{formatTime(duration)}</span>
       </div>
       <p className="file-help" style={{ marginTop: 12 }}>
-        拖动两端选择 20–60 秒。试听后点击生成，只有独立片段会上传。
+        拖动两端选择 20–60 秒。保存时自动生成片段，也可以先生成试听。
       </p>
       <div className="clip-fields">
         <div className="field">

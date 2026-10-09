@@ -15,13 +15,11 @@ export function AudioPlayer({
   state,
   manager,
   retry,
-  onTrack,
 }: {
   album: Album;
   state: AudioSnapshot;
   manager: AudioManager;
   retry: () => void;
-  onTrack: (trackId: string) => void;
 }) {
   const playing = state.playingIntent;
   const ready = state.status === "playing" || state.status === "paused";
@@ -129,27 +127,6 @@ export function AudioPlayer({
             </button>
           )}
         </div>
-      )}
-      {album.tracks.length > 1 && (
-        <details className="track-disclosure">
-          <summary>
-            查看曲目 <span>{album.tracks.length} tracks</span>
-          </summary>
-          <div className="gallery-tracks">
-            {album.tracks.map((track) => (
-              <button
-                key={track.id}
-                disabled={!track.audioUrl}
-                onClick={() => onTrack(track.id)}
-                className={track.id === state.track?.id ? "active" : ""}
-              >
-                <span>{String(track.trackNumber).padStart(2, "0")}</span>
-                <span>{track.title}</span>
-                <span>{formatTime(track.duration ?? 0)}</span>
-              </button>
-            ))}
-          </div>
-        </details>
       )}
     </div>
   );

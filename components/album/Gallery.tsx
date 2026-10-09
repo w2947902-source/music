@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import { ArrowUpRight, Library } from "lucide-react";
 import type { ArchiveMode } from "@/lib/supabase/albumRepository";
@@ -17,33 +17,17 @@ export function Gallery({ mode = "public" }: { mode?: ArchiveMode }) {
   const { albums, loading, error, refresh } = useAlbums(mode);
   const previewId = useSearchParams().get("album");
   const [selectedId, setSelectedId] = useState<string>();
-  const [trackId, setTrackId] = useState<string>();
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const index = Math.max(
     0,
     albums.findIndex((album) => album.id === (selectedId ?? previewId)),
   );
   const album = albums[index];
-  const playbackAlbum = useMemo(
-    () =>
-      trackId && album
-        ? {
-            ...album,
-            backgroundAudio: undefined,
-            tracks: [
-              ...album.tracks.filter((track) => track.id === trackId),
-              ...album.tracks.filter((track) => track.id !== trackId),
-            ],
-          }
-        : album,
-    [album, trackId],
-  );
-  const { state, manager } = useAudioPlayer(playbackAlbum);
+  const { state, manager } = useAudioPlayer(album);
   const closeDirectory = useCallback(() => setDirectoryOpen(false), []);
   const select = useCallback(
     (position: number) => {
       setSelectedId(albums[position]?.id);
-      setTrackId(undefined);
       setDirectoryOpen(false);
     },
     [albums],
@@ -124,11 +108,10 @@ export function Gallery({ mode = "public" }: { mode?: ArchiveMode }) {
               <AnimatePresence mode="wait" initial={false}>
                 <AlbumView key={album.id} album={album} number={index + 1}>
                   <AudioPlayer
-                    album={playbackAlbum!}
+                    album={album}
                     state={state}
                     manager={manager}
-                    retry={() => void manager.select(playbackAlbum)}
-                    onTrack={setTrackId}
+                    retry={() => void manager.select(album)}
                   />
                 </AlbumView>
               </AnimatePresence>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Check, ImagePlus, Loader2, Upload, X } from "lucide-react";
-import type { Album, AudioClip, PendingAsset, Track } from "@/types/album";
+import type { Album, AudioClip, PendingAsset } from "@/types/album";
 import { validateAlbum } from "@/lib/albums/validation";
 import { cloudAlbumRepository as albumRepository } from "@/lib/supabase/albumRepository";
 import { validateCover } from "@/lib/audio/probeFile";
@@ -12,7 +12,6 @@ import { acquireMediaUrl, releaseMediaUrl } from "@/lib/storage/mediaUrls";
 import { AlbumCover } from "@/components/album/AlbumCover";
 import { AudioClipEditor } from "@/components/audio/AudioClipEditor";
 import { useDialog } from "@/components/ui/useDialog";
-import { TrackEditor } from "./TrackEditor";
 
 const COLORS = ["#141b18", "#101a25", "#281c16", "#201923", "#191919"];
 export function AlbumEditor({
@@ -52,7 +51,8 @@ export function AlbumEditor({
   const [clipDirty, setClipDirty] = useState(false);
   const pending = useRef<PendingAsset[]>([]);
   const [sources, setSources] = useState<Map<string, DecodedSource>>(() => new Map());
-  const replaceTrackId = useRef<string | undefined>(undefined);
+  const clipSelection = useRef<AudioClip | undefined>(undefined);
+  const saveInFlight = useRef(false);
   const encoder = useRef<AbortController | null>(null);
   const objectUrls = useRef<string[]>([]);
   const audioInput = useRef<HTMLInputElement>(null);
@@ -100,30 +100,38 @@ export function AlbumEditor({
   }
   async function uploadTracks(files: File[]) {
     if (!files.length) return;
-    if (sources.size) { setError("请先生成当前 MP3 的片段，或删除该曲目，再选择下一首。"); return; }
     setUploading(true);
     setError(undefined);
     setImportNotice(undefined);
     try {
       const file = files[0];
-      const replacing = replaceTrackId.current;
       const decoded = await decodeMp3(file);
       if (closed.current) { URL.revokeObjectURL(decoded.url); return; }
       objectUrls.current.push(decoded.url);
       const metadata = await readMp3Metadata(file);
       if (closed.current) return;
-      const coverUrl = metadata.cover && !draft.coverUrl ? stageCover(metadata.cover) : undefined;
-      const trackId = replacing ?? crypto.randomUUID();
-      setSources(previous => new Map(previous).set(trackId,decoded));
+      const coverUrl = metadata.cover && (!album || !draft.coverUrl) ? stageCover(metadata.cover) : undefined;
+      const trackId = draft.tracks[0]?.id ?? crypto.randomUUID();
+      for (const source of sources.values()) {
+        URL.revokeObjectURL(source.url);
+        objectUrls.current = objectUrls.current.filter(url => url !== source.url);
+      }
+      for (const url of Object.values(previewUrls)) {
+        URL.revokeObjectURL(url);
+        objectUrls.current = objectUrls.current.filter(item => item !== url);
+      }
+      pending.current = pending.current.filter(asset => asset.kind === "cover");
+      setPreviewUrls({});
+      setSources(new Map([[trackId, decoded]]));
       setDraft(previous => ({...previous,
-        title: previous.title.trim() ? previous.title : metadata.album,
-        artist: previous.artist.trim() ? previous.artist : metadata.artist,
-        year: previous.year ?? metadata.year,
-        coverUrl: previous.coverUrl || coverUrl || "",
-        tracks: replacing
-          ? previous.tracks.map(t => t.id === trackId ? {...t,title:metadata.title,audioUrl:"",duration:undefined} : t)
-          : [...previous.tracks,{id:trackId,title:metadata.title,audioUrl:"",trackNumber:previous.tracks.length+1}],
+        title: album && previous.title.trim() ? previous.title : metadata.album,
+        artist: album && previous.artist.trim() ? previous.artist : metadata.artist,
+        year: album ? previous.year ?? metadata.year : metadata.year,
+        coverUrl: coverUrl || previous.coverUrl,
+        tracks: [{id:trackId,title:metadata.title,audioUrl:"",trackNumber:1}],
+        backgroundAudio: undefined,
       }));
+      clipSelection.current = { trackId, start: 0, end: Math.min(30, decoded.buffer.duration) };
       setImportedFile(file.name);
       setImportNotice(metadata.notice);
       setClipTrackId(trackId);
@@ -143,30 +151,33 @@ export function AlbumEditor({
     : undefined;
   async function save(event: React.FormEvent, published = false) {
     event.preventDefault();
-    if (busy) return;
+    if (busy || saveInFlight.current) return;
     const failure = validateAlbum(draft);
     if (failure) {
       if (metadataSettings.current) metadataSettings.current.open = true;
       setError(failure);
       return;
     }
-    if (
-      sources.size > 0 || clipDirty
-    ) {
-      setError(
-        "请先生成选中的 20–60 秒独立片段，或删除待截选的曲目。完整原曲不会上传。",
-      );
+    if (!waveformTrack) {
+      setError("请先添加 MP3 文件。");
       return;
     }
+    saveInFlight.current = true;
     setSaving(true);
     setError(undefined);
     try {
+      // Save the freshly encoded result without waiting for React state to update.
+      const readyAlbum = clipDirty || !selectedTrack?.audioUrl
+        ? await confirmClip(clipSelection.current ?? {
+            trackId: waveformTrack.id, start: 0, end: Math.min(30, waveformTrack.duration ?? 30),
+          })
+        : draft;
       const sanitized = {
-        ...draft,
+        ...readyAlbum,
         published,
-        title: draft.title.trim(),
-        artist: draft.artist.trim(),
-        tracks: draft.tracks.map((track) => ({
+        title: readyAlbum.title.trim(),
+        artist: readyAlbum.artist.trim(),
+        tracks: readyAlbum.tracks.map((track) => ({
           ...track,
           title: track.title.trim(),
         })),
@@ -178,31 +189,11 @@ export function AlbumEditor({
       if (!closed.current)
         setError(cause instanceof Error ? cause.message : "保存失败，请重试。");
     } finally {
+      saveInFlight.current = false;
       if (!closed.current) setSaving(false);
     }
   }
-  function changeTracks(tracks: Track[]) {
-    const nextSources = new Map(sources);
-    for (const [id, source] of sources) if (!tracks.some(t => t.id === id)) {
-      URL.revokeObjectURL(source.url); nextSources.delete(id);
-      objectUrls.current = objectUrls.current.filter(url => url !== source.url);
-    }
-    setSources(nextSources);
-    setDraft((previous) => ({
-      ...previous,
-      tracks,
-      backgroundAudio: tracks.some(
-        (track) => track.id === previous.backgroundAudio?.trackId,
-      )
-        ? previous.backgroundAudio
-        : undefined,
-    }));
-    if (!tracks.some((track) => track.id === clipTrackId)) {
-      setClipTrackId(tracks[0]?.id ?? "");
-      setClipDirty(false);
-    }
-  }
-  const confirmClip = async (clip: AudioClip) => {
+  const confirmClip = async (clip: AudioClip): Promise<Album> => {
     if (!waveformTrack) throw new Error("请选择音频。");
     setUploading(true); setError(undefined);
     encoder.current = new AbortController();
@@ -217,7 +208,7 @@ export function AlbumEditor({
         buffer = await decodeBlob(await response.blob());
       }
       const result = await encodeExcerpt(buffer,clip.start,clip.end,encoder.current.signal);
-      if (closed.current) return;
+      if (closed.current) throw new Error("音频处理已取消。");
       const id = crypto.randomUUID();
       const previous = draft.tracks.find(t => t.id === clip.trackId)?.audioUrl;
       pending.current = pending.current.filter(a => `asset:${a.id}` !== previous);
@@ -227,12 +218,14 @@ export function AlbumEditor({
       const oldPreview = previewUrls[clip.trackId];
       if (oldPreview) { URL.revokeObjectURL(oldPreview); objectUrls.current = objectUrls.current.filter(item => item !== oldPreview); }
       setPreviewUrls(previous => ({...previous,[clip.trackId]:url}));
-      if (selectedSource) { setSources(previous => { const next=new Map(previous); next.delete(clip.trackId); return next; }); URL.revokeObjectURL(selectedSource.url); objectUrls.current = objectUrls.current.filter(item => item !== selectedSource.url); }
-      setDraft(previous => ({...previous,
-        tracks:previous.tracks.map(t => t.id === clip.trackId ? {...t,audioUrl:`asset:${id}`,duration:result.duration} : t),
-        backgroundAudio:!previous.backgroundAudio || previous.backgroundAudio.trackId === clip.trackId ? {trackId:clip.trackId,start:0,end:result.duration} : previous.backgroundAudio,
-      }));
+      // Retain the original waveform locally so later edits can use the full song.
+      const nextAlbum = {...draft,
+        tracks:draft.tracks.map(t => t.id === clip.trackId ? {...t,audioUrl:`asset:${id}`,duration:result.duration} : t),
+        backgroundAudio:{trackId:clip.trackId,start:0,end:result.duration},
+      };
+      setDraft(nextAlbum);
       setClipDirty(false);
+      return nextAlbum;
     } finally {
       if (acquired) releaseMediaUrl(acquired);
       if (!closed.current) setUploading(false);
@@ -279,11 +272,11 @@ export function AlbumEditor({
             <button
               className="upload-tracks mp3-import"
               type="button"
-              disabled={busy || sources.size > 0 || draft.tracks.length >= 100}
-              onClick={() => { replaceTrackId.current = undefined; audioInput.current?.click(); }}
+              disabled={busy}
+              onClick={() => audioInput.current?.click()}
             >
               <Upload size={26} strokeWidth={1} />
-              <strong>{uploading ? "正在读取文件…" : "添加 MP3 文件"}</strong>
+              <strong>{uploading ? "正在处理…" : draft.tracks.length ? "更换 MP3 文件" : "添加 MP3 文件"}</strong>
               <span className="file-help">自动提取封面、专辑名、歌手和歌名</span>
             </button>
             <input
@@ -442,24 +435,11 @@ export function AlbumEditor({
                 </div>
               </div>
             </div>
-            <section className="editor-section">
-              <div className="editor-section-heading">
-                <h3>
-                  Track list <span>/ 曲目 · {draft.tracks.length}</span>
-                </h3>
-                <button type="button" className="button" disabled={draft.tracks.length >= 100} onClick={() => setField("tracks",[...draft.tracks,{id:crypto.randomUUID(),title:"",audioUrl:"",trackNumber:draft.tracks.length+1}])}>添加歌曲信息</button>
-              </div>
-              {draft.tracks.length ? (
-                <TrackEditor
-                  tracks={draft.tracks}
-                  onChange={changeTracks}
-                  disabled={busy}
-                  onReplace={(id) => { replaceTrackId.current=id; audioInput.current?.click(); }}
-                />
-              ) : (
-                <p className="file-help">先点击上方“添加 MP3 文件”，曲目信息会自动填写。</p>
-              )}
-            </section>
+            {selectedTrack && <div className="field" style={{marginTop:20}}>
+              <label htmlFor="song-title">歌曲名称</label>
+              <input id="song-title" className="input" maxLength={200} value={selectedTrack.title}
+                onChange={event => setField("tracks", [{...selectedTrack, title:event.target.value}])} />
+            </div>}
             </details>
             {draft.tracks.length > 0 && (
               <section className="editor-section">
@@ -469,32 +449,8 @@ export function AlbumEditor({
                   </h3>
                 </div>
                 <p className="clip-intro">
-                  拖动波形两端选择 20–60 秒，试听后点击“生成独立片段”。
+                  默认选取前 30 秒，也可拖动波形两端选择 20–60 秒。保存时自动生成并上传片段。
                 </p>
-                {draft.tracks.length > 1 && (
-                <div className="clip-track-choice">
-                  <select
-                    className="select"
-                    aria-label="选择背景音乐歌曲"
-                    value={clipTrackId}
-                    onChange={(event) => {
-                      setClipTrackId(event.target.value);
-                      setClipDirty(sources.has(event.target.value));
-                    }}
-                  >
-                    <option value="">
-                      选择要截取或试听的歌曲
-                    </option>
-                    {draft.tracks.map((track) => (
-                      <option key={track.id} value={track.id}>
-                        {String(track.trackNumber).padStart(2, "0")} ·{" "}
-                        {track.title}
-                      </option>
-                    ))}
-                  </select>
-                  <span className="file-help">确认后生成 WAV，原始 MP3 只用于本地处理</span>
-                </div>
-                )}
                 {waveformTrack && (
                   <AudioClipEditor
                     key={`${waveformTrack.id}:${waveformTrack.audioUrl}`}
@@ -502,16 +458,13 @@ export function AlbumEditor({
                     initialClip={
                       selectedSource ? undefined : {trackId:waveformTrack.id,start:0,end:waveformTrack.duration!}
                     }
-                    onConfirm={confirmClip}
+                    onConfirm={async clip => { await confirmClip(clip); }}
+                    onRangeChange={clip => { clipSelection.current = clip; }}
                     onDirty={() => setClipDirty(true)}
                     disabled={busy}
                     peaks={selectedSource?.peaks}
                   />
                 )}
-                {draft.tracks.length > 1 && <div className="field" style={{marginTop:20}}><label htmlFor="featured-track">专辑默认播放的歌曲</label><select id="featured-track" className="select" value={draft.backgroundAudio?.trackId ?? ""} onChange={event => {
-                  const track=draft.tracks.find(t => t.id === event.target.value);
-                  setField("backgroundAudio",track?.audioUrl ? {trackId:track.id,start:0,end:track.duration!} : undefined);
-                }}><option value="">自动选择首个片段</option>{draft.tracks.filter(t => t.audioUrl).map(t => <option value={t.id} key={t.id}>{t.title}</option>)}</select></div>}
               </section>
             )}
           </fieldset>

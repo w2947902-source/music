@@ -1,5 +1,280 @@
 @import "tailwindcss";
 
+/* Immersive listening room. Shared admin styles remain unchanged. */
+html:has(.listening-space), body:has(.listening-space) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.listening-space {
+  --cover-size: min(62vh, 35.2vw, 680px);
+  --rail-width: 124px;
+  --rail-step: 80px;
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  min-height: 320px;
+  overflow: hidden;
+  isolation: isolate;
+  background: #19202d;
+  color: #f6f3ef;
+  user-select: none;
+  overscroll-behavior: none;
+}
+.space-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none;
+}
+.space-background-image {
+  position: absolute;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
+  max-width: none;
+  object-fit: cover;
+  filter: blur(52px) saturate(1.15) brightness(.75);
+  will-change: opacity;
+}
+.space-background-shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, #080b1410, #080b1410 65%, #080b1440);
+}
+.space-carousel {
+  position: absolute;
+  inset: 0;
+  touch-action: pan-y;
+  cursor: grab;
+}
+.space-carousel:active { cursor: grabbing; }
+.space-orbit {
+  position: absolute;
+  left: 50%;
+  top: 46.3%;
+  width: 0;
+  height: 0;
+  perspective: 1450px;
+  transform-style: preserve-3d;
+}
+.space-record {
+  position: absolute;
+  left: calc(var(--cover-size) / -2);
+  top: calc(var(--cover-size) / -2);
+  width: var(--cover-size);
+  height: var(--cover-size);
+  transform-style: preserve-3d;
+  will-change: transform, opacity;
+}
+.space-cover-button {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 1px solid #ffffff1c;
+  border-radius: 2px;
+  transform-style: preserve-3d;
+  cursor: inherit;
+}
+.listening-space .album-cover {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  box-shadow: none;
+}
+.listening-space .album-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+.space-reflection {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: scaleY(-1);
+  opacity: .26;
+  filter: blur(5px);
+  mask-image: linear-gradient(to top, #000b, transparent 55%);
+  -webkit-mask-image: linear-gradient(to top, #000b, transparent 55%);
+  pointer-events: none;
+}
+.space-info-position {
+  position: absolute;
+  left: 50%;
+  top: 46.3%;
+  width: var(--cover-size);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 500;
+}
+.space-album-info {
+  text-align: center;
+  padding: 20px;
+  font-family: var(--font-sans);
+  overflow-wrap: anywhere;
+  text-shadow: 0 2px 18px #0003;
+}
+.space-album-info h1 {
+  font-family: var(--font-sans);
+  font-size: clamp(24px, 2.35vw, 42px);
+  font-weight: 600;
+  letter-spacing: -.02em;
+  line-height: 1.25;
+}
+.space-album-info p {
+  margin-top: 15px;
+  font-size: clamp(18px, 1.7vw, 29px);
+  font-weight: 400;
+  line-height: 1.4;
+  color: #f2efeddf;
+}
+.space-rail {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--rail-width);
+  height: 100%;
+  overflow: hidden;
+  z-index: 600;
+  background: #15192562;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border-right: 1px solid #ffffff20;
+  touch-action: none;
+  cursor: grab;
+}
+.space-rail:active { cursor: grabbing; }
+.space-rail::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, #10152060, transparent 10%, transparent 90%, #10152060);
+  pointer-events: none;
+  z-index: 4;
+}
+.space-rail-record {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 1px solid #ffffff28;
+  border-radius: 3px;
+  will-change: transform;
+}
+.space-rail-record:hover { border-color: #ffffff80; }
+.space-rail-slot {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 86px;
+  height: 78px;
+  transform: translate(-50%, -50%);
+  border: 1px solid #eee9caab;
+  border-radius: 7px;
+  box-shadow: 0 0 0 2px #fff2, inset 0 0 0 1px #fff2;
+  pointer-events: none;
+  z-index: 5;
+}
+.space-rail-toggle {
+  position: absolute;
+  z-index: 650;
+  left: 0;
+  top: calc(50% - 45px);
+  width: 28px;
+  height: 90px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 0 15px 15px 0;
+  background: #151a2942;
+  color: #faf8f4bf;
+  transition: background .2s, color .2s;
+}
+.space-rail-toggle:hover { background: #151a2980; color: white; }
+.space-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  opacity: .48;
+  transition: opacity .2s;
+}
+.space-icon-button:hover, .space-icon-button:focus-visible { opacity: 1; }
+.space-admin-link {
+  position: absolute;
+  top: max(22px, env(safe-area-inset-top));
+  right: max(25px, env(safe-area-inset-right));
+  z-index: 700;
+  opacity: .8;
+}
+.space-audio-controls {
+  position: absolute;
+  bottom: max(22px, env(safe-area-inset-bottom));
+  right: max(25px, env(safe-area-inset-right));
+  z-index: 700;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.space-spinner { animation: space-spin 1s linear infinite; }
+@keyframes space-spin { to { transform: rotate(360deg); } }
+.space-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  color: #ffffff88;
+  font-size: .9rem;
+}
+.space-notice {
+  position: absolute;
+  z-index: 800;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(75vw, 520px);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: #131827bb;
+  border-radius: 6px;
+  color: #f4f0eacc;
+  font-size: .8rem;
+}
+@media (max-width: 639px) {
+  .listening-space {
+    --cover-size: min(70vw, 52vh);
+    --rail-width: 88px;
+    --rail-step: 68px;
+  }
+  .space-orbit { perspective: 1000px; }
+  .space-rail-record { width: 52px; height: 52px; }
+  .space-rail-slot { width: 68px; height: 62px; }
+  .space-background-image { filter: blur(35px) saturate(1.15) brightness(.72); }
+  .space-admin-link { top: max(12px, env(safe-area-inset-top)); right: 12px; }
+  .space-audio-controls { right: 12px; bottom: max(15px, env(safe-area-inset-bottom)); }
+  .space-album-info { padding: 12px; }
+  .space-album-info h1 { font-size: clamp(22px, 6vw, 30px); }
+  .space-album-info p { font-size: 18px; margin-top: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .space-record, .space-rail-record { will-change: auto; }
+  .space-reflection { display: none; }
+  .space-spinner { animation-duration: 2s; }
+}
+
+
 @theme inline {
   --font-sans: "Helvetica Neue", Arial, "Microsoft YaHei", sans-serif;
   --font-serif:

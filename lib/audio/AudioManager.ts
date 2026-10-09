@@ -116,7 +116,8 @@ export class AudioManager {
       cancelAnimationFrame(this.frame);
       this.frame = undefined;
     }
-    for (const voice of [...this.voices]) if (!voice.ready) this.release(voice);
+    // A superseding switch retains only the current voice, never a stack of old fades.
+    for (const voice of [...this.voices]) if (!voice.ready || voice !== this.active) this.release(voice);
     const clip = album?.backgroundAudio;
     const track =
       album?.tracks.find((item) => item.id === clip?.trackId) ??

@@ -41,9 +41,15 @@ export async function probeAudioFile(file: File): Promise<number> {
   }
 }
 export async function validateCover(file: File): Promise<void> {
-  if (!file.type.startsWith("image/") || file.type === "image/svg+xml")
-    throw new Error("请上传 JPG、PNG、WebP 或其他浏览器支持的位图封面。");
-  if (file.size > 30 * 1024 * 1024) throw new Error("封面不能超过 30 MB。");
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
+    throw new Error("请上传 JPG、PNG 或 WebP 封面。");
+  if (!file.size || file.size > 5 * 1024 * 1024) throw new Error("封面必须非空且不能超过 5 MB。");
+  const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
+  const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((value, index) => bytes[index] === value);
+  const webp = String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  if (!(file.type === "image/jpeg" ? jpeg : file.type === "image/png" ? png : webp))
+    throw new Error("封面内容与文件格式不一致，请使用真正的 JPG、PNG 或 WebP 图片。");
   const url = URL.createObjectURL(file);
   try {
     await new Promise<void>((resolve, reject) => {

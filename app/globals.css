@@ -1464,3 +1464,14 @@ figure {
     scroll-behavior: auto !important;
   }
 }
+.auth-panel { max-width: 540px; margin-inline: auto; padding-top: 70px; }
+.auth-panel h1 { font-size: clamp(2rem, 5vw, 3.5rem); margin: 18px 0 28px; }
+.auth-panel .field { margin: 24px 0; }
+.auth-panel .button { margin: 8px 8px 8px 0; }
+.published-badge { color: #c3cfaa; border-color: #65705b; }
+.editor-publish { display: flex; align-items: center; gap: 12px; margin: 20px 0; }
+.editor-publish input { accent-color: #c3cfaa; width: 18px; height: 18px; }
+.track-clip-status { font-size: .7rem; color: #c3cfaa; }
+.gallery-tracks button:disabled { opacity: .5; cursor: default; }
+.admin-row-actions { flex-wrap: wrap; }
+.track-source-button { font-size: .72rem; white-space: nowrap; }

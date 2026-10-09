@@ -23,9 +23,12 @@ export interface Album {
   backgroundColor?: string;
   description?: string;
   isDemo?: boolean;
+  published?: boolean;
+  updatedAt?: string;
 }
 export interface PendingAsset {
   id: string;
   blob: Blob;
   kind: "cover" | "audio";
+  duration?: number;
 }

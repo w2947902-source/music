@@ -33,7 +33,7 @@ export function AudioPlayer({
           {playing ? "NOW LISTENING" : "ON THE RECORD"}
         </span>
         <span className="clip-label">
-          {album.backgroundAudio ? "SELECTED EXCERPT" : "FULL TRACK"}
+          {album.isDemo ? "ORIGINAL DEMO" : "SELECTED EXCERPT"}
         </span>
       </div>
       <div className="player-track">
@@ -139,6 +139,7 @@ export function AudioPlayer({
             {album.tracks.map((track) => (
               <button
                 key={track.id}
+                disabled={!track.audioUrl}
                 onClick={() => onTrack(track.id)}
                 className={track.id === state.track?.id ? "active" : ""}
               >

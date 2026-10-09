@@ -6,10 +6,12 @@ export function TrackEditor({
   tracks,
   onChange,
   disabled,
+  onReplace,
 }: {
   tracks: Track[];
   onChange: (tracks: Track[]) => void;
   disabled?: boolean;
+  onReplace: (id:string) => void;
 }) {
   const move = (index: number, direction: number) => {
     const next = [...tracks];
@@ -42,8 +44,10 @@ export function TrackEditor({
             }
           />
           <span className="track-duration">
-            {formatTime(track.duration ?? 0)}
+            {track.audioUrl ? formatTime(track.duration ?? 0) : "—"}
           </span>
+          <button type="button" className="text-button track-source-button" disabled={disabled} onClick={() => onReplace(track.id)} aria-label={`更换音频 ${track.title}`}>{track.audioUrl ? "更换 MP3" : "选择 MP3"}</button>
+          <span className="track-clip-status">{track.audioUrl ? "独立片段" : "暂无片段"}</span>
           <div className="track-editor-actions">
             <button
               type="button"

@@ -1,28 +1,33 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Album } from "@/types/album";
-import { albumRepository } from "@/lib/storage/albumRepository";
-import { demoAlbums } from "./demo";
+import { cloudAlbumRepository, type ArchiveMode } from "@/lib/supabase/albumRepository";
 
-export function useAlbums() {
+export function useAlbums(mode: ArchiveMode = "public") {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const sequence = useRef(0);
+  const invalidate = useCallback(() => { sequence.current++; }, []);
   const refresh = useCallback(async () => {
+    const current = ++sequence.current;
     try {
-      await albumRepository.initialize();
-      setAlbums(await albumRepository.getAll());
+      const next = await cloudAlbumRepository.getAll(mode);
+      if (current !== sequence.current) return;
+      setAlbums(next);
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "无法读取本地收藏。");
-      setAlbums(demoAlbums);
+      if (current !== sequence.current) return;
+      setError(cause instanceof Error ? cause.message : "无法读取档案馆，请稍后重试。");
+      setAlbums([]);
     } finally {
-      setLoading(false);
+      if (current === sequence.current) setLoading(false);
     }
-  }, []);
+  }, [mode]);
   useEffect(() => {
+    let active = true;
     queueMicrotask(() => {
-      void refresh();
+      if (active) void refresh();
     });
     const update = () => {
       if (document.visibilityState === "visible") void refresh();
@@ -30,9 +35,11 @@ export function useAlbums() {
     window.addEventListener("focus", refresh);
     document.addEventListener("visibilitychange", update);
     return () => {
+      active = false;
+      invalidate();
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", update);
     };
-  }, [refresh]);
+  }, [refresh, invalidate]);
   return { albums, loading, error, refresh };
 }

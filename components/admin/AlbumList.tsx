@@ -17,6 +17,7 @@ function Row({
   total,
   onEdit,
   onDelete,
+  onPublish,
   onMove,
   onDragEnd,
   disabled,
@@ -26,6 +27,7 @@ function Row({
   total: number;
   onEdit: (album: Album) => void;
   onDelete: (album: Album) => void;
+  onPublish: (album: Album) => void;
   onMove: (index: number, delta: number) => void;
   onDragEnd: () => void;
   disabled: boolean;
@@ -58,7 +60,7 @@ function Row({
       <div className="admin-album-details">
         <h2>
           {album.title}
-          {album.isDemo && <span className="demo-badge">DEMO</span>}
+          <span className={`demo-badge ${album.published ? "published-badge" : ""}`}>{album.published ? "已发布" : "草稿"}</span>
         </h2>
         <p>
           {album.artist} · {album.year ?? "—"} · {album.tracks.length} tracks
@@ -83,12 +85,15 @@ function Row({
         </button>
         <Link
           className="text-button"
-          href={`/?album=${encodeURIComponent(album.id)}`}
+          href={`/admin/preview?album=${encodeURIComponent(album.id)}`}
           aria-label={`预览 ${album.title}`}
         >
           <Eye size={15} />
           <span>Preview</span>
         </Link>
+        <button className="text-button" disabled={disabled} onClick={() => onPublish(album)} aria-label={`${album.published ? "取消发布" : "发布专辑"} ${album.title}`}>
+          {album.published ? "取消发布" : "发布"}
+        </button>
         <button
           className="text-button"
           disabled={disabled}
@@ -117,6 +122,7 @@ export function AlbumList({
   onMove,
   onEdit,
   onDelete,
+  onPublish,
   disabled,
 }: {
   albums: Album[];
@@ -126,6 +132,7 @@ export function AlbumList({
   onMove: (index: number, delta: number) => void;
   onEdit: (album: Album) => void;
   onDelete: (album: Album) => void;
+  onPublish: (album: Album) => void;
   disabled: boolean;
 }) {
   return (
@@ -145,6 +152,7 @@ export function AlbumList({
             total={ids.length}
             onEdit={onEdit}
             onDelete={onDelete}
+            onPublish={onPublish}
             onMove={onMove}
             onDragEnd={onCommit}
             disabled={disabled}

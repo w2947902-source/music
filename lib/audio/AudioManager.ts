@@ -120,7 +120,7 @@ export class AudioManager {
     const clip = album?.backgroundAudio;
     const track =
       album?.tracks.find((item) => item.id === clip?.trackId) ??
-      album?.tracks[0];
+      album?.tracks.find((item) => Boolean(item.audioUrl));
     if (!track?.audioUrl) {
       this.active = undefined;
       this.fade();

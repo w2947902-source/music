@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import { ArrowUpRight, Library } from "lucide-react";
+import type { ArchiveMode } from "@/lib/supabase/albumRepository";
 import { Brand } from "@/components/ui/Brand";
 import { useAlbums } from "@/lib/albums/useAlbums";
 import { useAudioPlayer } from "@/lib/audio/useAudioPlayer";
@@ -12,8 +13,8 @@ import { AlbumDirectory } from "@/components/navigation/AlbumDirectory";
 import { AlbumNavigation } from "@/components/navigation/AlbumNavigation";
 import { AlbumView } from "./AlbumView";
 
-export function Gallery() {
-  const { albums, loading, error } = useAlbums();
+export function Gallery({ mode = "public" }: { mode?: ArchiveMode }) {
+  const { albums, loading, error, refresh } = useAlbums(mode);
   const previewId = useSearchParams().get("album");
   const [selectedId, setSelectedId] = useState<string>();
   const [trackId, setTrackId] = useState<string>();
@@ -97,15 +98,12 @@ export function Gallery() {
                 {String(albums.length).padStart(2, "0")}
               </span>
             </button>
-            <Link href="/admin" className="archive-link">
-              MANAGE
-              <ArrowUpRight size={15} />
-            </Link>
+            {mode === "admin" && <Link href="/admin" className="archive-link">返回管理 <ArrowUpRight size={15} /></Link>}
           </nav>
         </header>
         {error && (
           <div className="storage-warning" role="alert">
-            {error} 当前显示只读示例，上传未保存。
+            {error} <button className="text-button" onClick={() => void refresh()}>重试</button>
           </div>
         )}
         <div className="gallery-content">
@@ -142,16 +140,14 @@ export function Gallery() {
             </>
           ) : (
             <div className="empty-state">
-              <span className="eyebrow">YOUR COLLECTION STARTS HERE</span>
+              <span className="eyebrow">THE PERSONAL MUSIC ARCHIVE</span>
               <h1>
                 A space for
                 <br />
                 your records.
               </h1>
-              <p>收藏第一张专辑，让它的声音与封面留在这里。</p>
-              <Link href="/admin" className="button primary">
-                Add your first album
-              </Link>
+              <p>{error ? "暂时无法打开收藏，请稍后重试。" : "档案馆正在整理中。已发布的专辑将在这里与你相遇。"}</p>
+              {mode === "admin" && <Link href="/admin" className="button primary">返回管理专辑</Link>}
             </div>
           )}
         </div>

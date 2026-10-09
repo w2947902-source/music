@@ -990,6 +990,71 @@ figure {
 .upload-tracks:hover {
   border-color: var(--accent);
 }
+.mp3-import {
+  width: 100%;
+  background: #ffffff03;
+}
+.mp3-import strong {
+  color: var(--paper);
+  font-size: 1rem;
+  font-weight: 400;
+}
+.mp3-import:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.imported-record {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 26px;
+}
+.imported-record-cover {
+  width: clamp(80px, 16vw, 140px);
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  position: relative;
+}
+.imported-record-cover .album-cover {
+  position: absolute;
+  inset: 0;
+}
+.imported-record-info {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.imported-record-info h3 {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 4vw, 2.2rem);
+  font-weight: 400;
+  margin: 8px 0;
+}
+.imported-record-info p {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.imported-record-info .imported-record-song {
+  color: var(--paper);
+  margin-top: 8px;
+}
+.imported-record-info .file-help {
+  color: var(--dim);
+  font-size: 0.75rem;
+  margin-top: 8px;
+}
+.metadata-details {
+  margin-top: 24px;
+}
+.metadata-details > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding-block: 12px;
+}
+.metadata-details[open] > summary {
+  margin-bottom: 18px;
+}
 .sr-only {
   position: absolute;
   width: 1px;

@@ -30,6 +30,6 @@ export function useMediaUrl(source?: string) {
     ? resolved
     : {
         source: source ?? "",
-        url: source?.startsWith("asset:") ? "" : (source ?? ""),
+        url: source?.startsWith("asset:") || source?.startsWith("cloud-") ? "" : (source ?? ""),
       };
 }

@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { encodePcmWav } from "../public/workers/wav-encoder.js";
+test("independent WAV has precise PCM headers, stereo samples and only the chosen frames", () => {
+  const rate = 8000;
+  const left = new Float32Array(20*rate).fill(.5);
+  const right = new Float32Array(20*rate).fill(-.5);
+  const encoded=encodePcmWav([left,right],rate);
+  const view=new DataView(encoded);
+  assert.equal(new TextDecoder().decode(encoded.slice(0,4)),"RIFF");
+  assert.equal(new TextDecoder().decode(encoded.slice(8,12)),"WAVE");
+  assert.equal(view.getUint16(20,true),1);
+  assert.equal(view.getUint16(22,true),2);
+  assert.equal(view.getUint32(24,true),rate);
+  assert.equal(view.getUint16(34,true),16);
+  assert.equal(view.getUint32(40,true)/view.getUint32(28,true),20);
+  assert.equal(view.getInt16(44,true),16384);
+  assert.equal(view.getInt16(46,true),-16384);
+  assert.equal(encoded.byteLength,44+20*rate*4);
+  assert.throws(()=>encodePcmWav([new Float32Array(19*rate)],rate),/20–60/);
+  assert.throws(()=>encodePcmWav([new Float32Array(61*rate)],rate),/20–60/);
+  assert.throws(()=>encodePcmWav([left,new Float32Array(1)],rate),/20–60/);
+  assert.throws(()=>encodePcmWav([left],0),/参数/);
+});

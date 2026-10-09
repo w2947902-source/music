@@ -6,7 +6,8 @@ import { ArrowUpRight, Plus } from "lucide-react";
 import { Brand } from "@/components/ui/Brand";
 import { useDialog } from "@/components/ui/useDialog";
 import { useAlbums } from "@/lib/albums/useAlbums";
-import { albumRepository } from "@/lib/storage/albumRepository";
+import { cloudAlbumRepository as albumRepository } from "@/lib/supabase/albumRepository";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Album } from "@/types/album";
 import { AlbumEditor } from "./AlbumEditor";
 import { AlbumList } from "./AlbumList";
@@ -50,7 +51,7 @@ function DeleteConfirmation({
   );
 }
 export function AdminPage() {
-  const { albums, loading, error: storageError, refresh } = useAlbums();
+  const { albums, loading, error: storageError, refresh } = useAlbums("admin");
   const [editor, setEditor] = useState<Album | "new" | null>(null);
   const [deleting, setDeleting] = useState<Album | null>(null);
   const [ids, setIds] = useState<string[]>([]);
@@ -58,6 +59,11 @@ export function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>();
   const [error, setError] = useState<string>();
+  useEffect(() => {
+    let alive = true;
+    void albumRepository.cleanup().then(warning => { if (alive && warning) setMessage(warning); });
+    return () => { alive = false; };
+  }, []);
   useEffect(() => {
     const ordered = albums.map((album) => album.id);
     idsRef.current = ordered;
@@ -95,15 +101,25 @@ export function AdminPage() {
     setBusy(true);
     setError(undefined);
     try {
-      await albumRepository.delete(deleting.id);
+      const warning = await albumRepository.delete(deleting);
       setDeleting(null);
       await refresh();
-      setMessage("专辑已移出收藏。");
+      setMessage(warning ?? "专辑已移出云端档案馆。");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "删除失败。");
     } finally {
       setBusy(false);
     }
+  }
+  async function publish(album: Album) {
+    if (busy) return;
+    setBusy(true); setError(undefined);
+    try {
+      await albumRepository.setPublished(album, !album.published);
+      await refresh();
+      setMessage(album.published ? "已取消发布，访客无法再读取此专辑及素材。" : "已发布，访客刷新页面即可看到。");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "操作失败，请重试。"); }
+    finally { setBusy(false); }
   }
   return (
     <MotionConfig reducedMotion="user">
@@ -114,6 +130,7 @@ export function AdminPage() {
             THE ARCHIVE / BEHIND THE SLEEVE
           </span>
           <nav>
+            <button className="archive-link" onClick={() => void getSupabaseClient("admin").auth.signOut()}>退出登录</button>
             <Link href="/" className="archive-link">
               LISTENING ROOM
               <ArrowUpRight size={15} />
@@ -145,7 +162,7 @@ export function AdminPage() {
           </div>
           {storageError && (
             <p className="notice error" role="alert">
-              {storageError} 当前示例仅供预览，无法保存修改。
+              {storageError} <button className="text-button" onClick={() => void refresh()}>重试</button>
             </p>
           )}
           {error && (
@@ -176,12 +193,13 @@ export function AdminPage() {
                 onMove={move}
                 onEdit={(album) => setEditor(album)}
                 onDelete={setDeleting}
+                onPublish={(album) => void publish(album)}
                 disabled={busy || Boolean(storageError)}
               />
               <p className="admin-bottom-note">
                 拖动左侧手柄调整展览顺序，也可以使用上下按钮。顺序会自动保存。
                 <br />
-                收藏保存在当前浏览器与设备；清除网站数据会同时移除上传素材。
+                草稿仅管理员可见。发布后所有访客共享同一份云端收藏。
               </p>
             </>
           ) : (
@@ -198,9 +216,9 @@ export function AdminPage() {
               album={editor === "new" ? undefined : editor}
               order={albums.length}
               onClose={closeEditor}
-              onSaved={async () => {
+              onSaved={async (warning?: string) => {
                 await refresh();
-                setMessage("专辑已保存。进入 Listening Room 即可预览。");
+                setMessage(warning ?? "专辑已保存到云端，可预览或发布。");
               }}
             />
           )}

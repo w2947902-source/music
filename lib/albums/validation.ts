@@ -15,6 +15,9 @@ export function validateClip(clip: AudioClip, tracks: Track[]): string | null {
   return null;
 }
 export function validateAlbum(album: Album): string | null {
+  if (album.title.length > 200 || album.artist.length > 200) return "专辑名称和艺术家各不能超过 200 字。";
+  if (album.tracks.length > 100) return "每张专辑最多添加 100 首歌曲。";
+  if ((album.description?.length ?? 0) > 5000) return "简介不能超过 5000 字。";
   if (!album.title.trim()) return "请输入专辑名称。";
   if (!album.artist.trim()) return "请输入艺术家名称。";
   if (
@@ -24,6 +27,8 @@ export function validateAlbum(album: Album): string | null {
     return "年份需要是四位数字。";
   if (album.tracks.some((track) => !track.title.trim()))
     return "每首歌曲都需要名称。";
+  if (album.tracks.some((track) => track.title.length > 200))
+    return "歌曲名称不能超过 200 字。";
   if (
     new Set(album.tracks.map((track) => track.id)).size !== album.tracks.length
   )

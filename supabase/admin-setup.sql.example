@@ -1,0 +1,5 @@
+-- Replace the placeholder with the UID from Authentication -> Users.
+-- Run after the migration in Supabase SQL Editor. Do not put a password here.
+insert into archive_private.administrators (singleton, user_id)
+values (true, 'REPLACE_WITH_YOUR_AUTH_USER_UID'::uuid)
+on conflict (singleton) do update set user_id = excluded.user_id;

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import WaveSurfer from "wavesurfer.js";
 import RegionsPlugin from "wavesurfer.js/dist/plugins/regions.esm.js";
 import type { Region } from "wavesurfer.js/dist/plugins/regions.esm.js";
-import { Check, Pause, Play, RotateCcw } from "lucide-react";
+import { Check, Pause, Play, RotateCcw, Loader2 } from "lucide-react";
 import type { AudioClip, Track } from "@/types/album";
 import { formatTime, validateClip } from "@/lib/albums/validation";
 import { useMediaUrl } from "@/lib/storage/useMediaUrl";
@@ -14,12 +14,14 @@ export function AudioClipEditor({
   onConfirm,
   onDirty,
   disabled,
+  peaks,
 }: {
   track: Track;
   initialClip?: AudioClip;
-  onConfirm: (clip: AudioClip) => void;
+  onConfirm: (clip: AudioClip) => Promise<void>;
   onDirty: () => void;
   disabled?: boolean;
+  peaks?: number[][];
 }) {
   const media = useMediaUrl(track.audioUrl);
   const container = useRef<HTMLDivElement>(null);
@@ -36,6 +38,7 @@ export function AudioClipEditor({
   const [playing, setPlaying] = useState(false);
   const [error, setError] = useState<string>();
   const [confirmed, setConfirmed] = useState(Boolean(initialClip));
+  const [processing, setProcessing] = useState(false);
   useEffect(() => {
     callbacks.current = { onDirty, onConfirm };
   }, [onDirty, onConfirm]);
@@ -116,7 +119,7 @@ export function AudioClipEditor({
       if (region.current && time >= region.current.end) wave.pause();
     });
     wave.on("error", fail);
-    void wave.load(media.url).catch(fail);
+    void wave.load(media.url,peaks,peaks ? track.duration : undefined).catch(fail);
     return () => {
       alive = false;
       clearTimeout(timeout);
@@ -124,10 +127,11 @@ export function AudioClipEditor({
       waves.current = null;
       region.current = null;
     };
-  }, [media.url, dirty]);
+  }, [media.url, dirty, peaks, track.duration]);
   const validation = validateClip({ trackId: track.id, start, end }, [
     { ...track, duration },
-  ]);
+  ]) ?? (end-start < 20 || end-start > 60 ? "请选择 20–60 秒片段。" : null);
+  const blocked = disabled || processing;
   function updateRange(from: number, to: number) {
     setStart(from);
     setEnd(to);
@@ -144,7 +148,7 @@ export function AudioClipEditor({
   }
   return (
     <div className="clip-editor">
-      <div className="waveform-wrap">
+      <div className="waveform-wrap" style={{pointerEvents:blocked ? "none" : undefined}}>
         <div ref={container} aria-label={`${track.title} 音频波形`} />
         {!ready && (
           <div className="waveform-status" role="status">
@@ -157,7 +161,7 @@ export function AudioClipEditor({
         <span>{formatTime(duration)}</span>
       </div>
       <p className="file-help" style={{ marginTop: 12 }}>
-        拖动两端调整选区，或在波形上拖出一段新的选区。下方时间以秒为单位。
+        拖动两端选择 20–60 秒。试听后点击生成，只有独立片段会上传。
       </p>
       <div className="clip-fields">
         <div className="field">
@@ -170,7 +174,7 @@ export function AudioClipEditor({
             max={duration}
             step="0.1"
             value={Number.isFinite(start) ? Number(start.toFixed(2)) : ""}
-            disabled={!ready || disabled}
+            disabled={!ready || blocked}
             onChange={(event) =>
               updateRange(
                 event.target.value === "" ? NaN : Number(event.target.value),
@@ -190,7 +194,7 @@ export function AudioClipEditor({
             max={duration}
             step="0.1"
             value={Number.isFinite(end) ? Number(end.toFixed(2)) : ""}
-            disabled={!ready || disabled}
+            disabled={!ready || blocked}
             onChange={(event) =>
               updateRange(
                 start,
@@ -212,7 +216,7 @@ export function AudioClipEditor({
         <button
           type="button"
           className="button"
-          disabled={!ready || !!validation || disabled}
+          disabled={!ready || !!validation || blocked}
           onClick={() => {
             if (playing) waves.current?.pause();
             else
@@ -227,7 +231,7 @@ export function AudioClipEditor({
         <button
           type="button"
           className="button"
-          disabled={!ready || disabled}
+          disabled={!ready || blocked}
           onClick={() => updateRange(0, Math.min(30, duration))}
         >
           <RotateCcw size={14} />
@@ -236,21 +240,23 @@ export function AudioClipEditor({
         <button
           type="button"
           className="button primary"
-          disabled={!ready || !!validation || disabled}
-          onClick={() => {
+          disabled={!ready || !!validation || blocked}
+          onClick={async () => {
             waves.current?.pause();
-            callbacks.current.onConfirm({ trackId: track.id, start, end });
-            setConfirmed(true);
+            setProcessing(true); setError(undefined);
+            try { await callbacks.current.onConfirm({ trackId: track.id, start, end }); setConfirmed(true); }
+            catch(cause) { setError(cause instanceof Error ? cause.message : "片段生成失败，请重试。"); }
+            finally { setProcessing(false); }
           }}
         >
-          <Check size={15} />
-          Confirm Selection
+          {processing ? <Loader2 size={15} /> : <Check size={15} />}
+          {processing ? "正在生成片段…" : "生成独立片段"}
         </button>
       </div>
       {confirmed && (
         <p className="clip-confirmed">
           <Check size={14} />
-          已确认背景音乐片段，保存专辑后生效。
+          片段已生成，保存专辑后上传。
         </p>
       )}
       {error && ready && (

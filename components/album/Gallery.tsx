@@ -70,20 +70,17 @@ export function Gallery({mode="public"}:{mode?:ArchiveMode}) {
   },[loopMode,albums,select,manager]);
   const toggleInfo=useCallback(()=>setIsInfoOpen(open=>!open),[]);
   const dragStart=useCallback(()=>{animation.current?.stop();setIsInfoOpen(false);setIsTransitioning(true);},[]);
-  const autoplayAttempted=useRef(false);
-  useEffect(()=>{
-    if(state.status==="paused"&&!autoplayAttempted.current&&album){
-      autoplayAttempted.current=true;void manager.play();
-    }
-  },[state.status,album,manager]);
   useEffect(()=>{manager.setVolume(isMuted?0:.7);},[isMuted,manager]);
   useEffect(()=>{
     const unlock=(event:Event)=>{
-      if((event.target as HTMLElement)?.closest?.(".space-audio-controls"))return;
-      if(manager.getSnapshot().status==="paused")void manager.play();
+      if((event.target as HTMLElement)?.closest?.(".space-play-toggle"))return;
+      if(event instanceof KeyboardEvent&&event.code==="Space")return;
+      const snapshot=manager.getSnapshot();
+      if(snapshot.playingIntent&&snapshot.status!=="playing")void manager.play();
     };
-    document.addEventListener("pointerdown",unlock,{once:true,capture:true});
-    return()=>document.removeEventListener("pointerdown",unlock,true);
+    document.addEventListener("pointerdown",unlock,{capture:true});
+    document.addEventListener("keydown",unlock,{capture:true});
+    return()=>{document.removeEventListener("pointerdown",unlock,true);document.removeEventListener("keydown",unlock,true);};
   },[manager]);
   useEffect(()=>{
     const keyboard=(event:KeyboardEvent)=>{
@@ -92,23 +89,38 @@ export function Gallery({mode="public"}:{mode?:ArchiveMode}) {
       if(event.key==="ArrowLeft"||isSidebarOpen&&event.key==="ArrowUp"){event.preventDefault();step(-1);}
       if(event.key==="ArrowRight"||isSidebarOpen&&event.key==="ArrowDown"){event.preventDefault();step(1);}
       if(event.code==="Space"&&(event.target===document.body||event.target===document.documentElement)){
-        event.preventDefault();if(state.playingIntent)manager.pause();else void manager.play();
+        event.preventDefault();if(state.playingIntent&&!state.autoplayBlocked)manager.pause();else void manager.play();
       }
     };
     window.addEventListener("keydown",keyboard);return()=>window.removeEventListener("keydown",keyboard);
-  },[isSidebarOpen,step,manager,state.playingIntent]);
+  },[isSidebarOpen,step,manager,state.playingIntent,state.autoplayBlocked]);
   useEffect(()=>{
     const adjacent=albums.slice(Math.max(0,activeAlbumIndex-1),activeAlbumIndex+2);
-    const covers=new Set(adjacent.map(item=>item.coverUrl));
-    const sources=[...new Set(adjacent.flatMap(item=>[item.coverUrl,item.tracks[0]?.audioUrl]).filter((source):source is string=>Boolean(source)))];
+    const sources=[...new Set(adjacent.map(item=>item.coverUrl).filter(Boolean))];
     const held:string[]=[];let cancelled=false;
     for(const source of sources)void acquireMediaUrl(source).then(url=>{
       if(cancelled){releaseMediaUrl(source);return;}
       held.push(source);
-      if(covers.has(source)){const image=new Image();image.src=url;void image.decode().catch(()=>{});}
+      const image=new Image();image.src=url;void image.decode().catch(()=>{});
     }).catch(()=>{});
     return()=>{cancelled=true;held.forEach(releaseMediaUrl);};
   },[albums,activeAlbumIndex]);
+  useEffect(()=>{
+    if(!albums.length||(state.status!=="playing"&&state.status!=="paused"))return;
+    const connection=(navigator as Navigator&{connection?:{saveData?:boolean;effectiveType?:string}}).connection;
+    if(connection?.saveData||connection?.effectiveType?.includes("2g"))return;
+    const neighbors=[albums[(activeAlbumIndex+1)%albums.length],albums[(activeAlbumIndex-1+albums.length)%albums.length]];
+    const sources=[...new Set(neighbors.filter(item=>item.id!==album?.id).map(item=>item.tracks[0]?.audioUrl).filter((source):source is string=>Boolean(source)))];
+    let cancelled=false;
+    // Warm audio after the current excerpt is ready, so its download gets priority.
+    const timer=setTimeout(()=>void(async()=>{
+      for(const source of sources){
+        if(cancelled)break;
+        try{await acquireMediaUrl(source);releaseMediaUrl(source);}catch{/* Retry normally when selected. */}
+      }
+    })(),150);
+    return()=>{cancelled=true;clearTimeout(timer);};
+  },[albums,activeAlbumIndex,album?.id,state.status]);
   useEffect(()=>{
     const timer=setInterval(()=>{if(document.visibilityState==="visible")void refresh();},30000);
     return()=>clearInterval(timer);
@@ -125,9 +137,9 @@ export function Gallery({mode="public"}:{mode?:ArchiveMode}) {
         {isSidebarOpen?<ChevronLeft size={25} strokeWidth={1.2}/>:<ChevronRight size={25} strokeWidth={1.2}/>}
       </motion.button>
       <div className="space-audio-controls">
-        <button className="space-icon-button" aria-label={state.status==="error"?"重试播放":isPlaying?"暂停音乐":"播放音乐"}
-          onClick={()=>{if(state.status==="error")void manager.select(album).then(()=>manager.play());else if(isPlaying)manager.pause();else void manager.play();}}>
-          {state.status==="loading"?<Loader2 size={19} className="space-spinner"/>:state.status==="error"?<RotateCcw size={19}/>:isPlaying?<Pause size={19}/>:<Play size={19}/>}
+        <button className="space-icon-button space-play-toggle" aria-label={state.status==="error"?"重试播放":isPlaying&&!state.autoplayBlocked?"暂停音乐":"播放音乐"}
+          onClick={()=>{if(state.status==="error"){void manager.play();void manager.select(album);}else if(isPlaying&&!state.autoplayBlocked)manager.pause();else void manager.play();}}>
+          {state.status==="loading"?<Loader2 size={19} className="space-spinner"/>:state.status==="error"?<RotateCcw size={19}/>:isPlaying&&!state.autoplayBlocked?<Pause size={19}/>:<Play size={19}/>}
         </button>
         <button className="space-icon-button" title={loopMode==="single"?"单曲循环 · 点击切换列表循环":"列表循环 · 点击切换单曲循环"}
           aria-label={loopMode==="single"?"当前单曲循环，切换为列表循环":"当前列表循环，切换为单曲循环"}

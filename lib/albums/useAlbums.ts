@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Album } from "@/types/album";
 import { cloudAlbumRepository, type ArchiveMode } from "@/lib/supabase/albumRepository";
+import { synchronizePublicMedia } from "@/lib/storage/mediaUrls";
 
 export function useAlbums(mode: ArchiveMode = "public") {
   const [albums, setAlbums] = useState<Album[]>([]);
@@ -14,6 +15,7 @@ export function useAlbums(mode: ArchiveMode = "public") {
     try {
       const next = await cloudAlbumRepository.getAll(mode);
       if (current !== sequence.current) return;
+      if (mode === "public") synchronizePublicMedia(next.flatMap(album => [album.coverUrl, ...album.tracks.map(track => track.audioUrl)]));
       setAlbums(next);
       setError(null);
     } catch (cause) {

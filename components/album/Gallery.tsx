@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { animate, motion, MotionConfig, useMotionValue, useReducedMotion } from "motion/react";
-import { ChevronLeft, ChevronRight, CircleUserRound, Loader2, Pause, Play, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { ChevronLeft, ChevronRight, CircleUserRound, Loader2, Pause, Play, Repeat, Repeat1, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import type { ArchiveMode } from "@/lib/supabase/albumRepository";
 import { useAlbums } from "@/lib/albums/useAlbums";
 import { useAudioPlayer } from "@/lib/audio/useAudioPlayer";
@@ -21,6 +21,7 @@ export function Gallery({mode="public"}:{mode?:ArchiveMode}) {
   const [isInfoOpen,setIsInfoOpen]=useState(false);
   const [isTransitioning,setIsTransitioning]=useState(false);
   const [isMuted,setIsMuted]=useState(false);
+  const [loopMode,setLoopMode]=useState<"single"|"list">("single");
   const {state,manager}=useAudioPlayer(album);
   const reduced=Boolean(useReducedMotion());
   const position=useMotionValue(activeAlbumIndex);
@@ -53,6 +54,20 @@ export function Gallery({mode="public"}:{mode?:ArchiveMode}) {
     currentIndex.current=next;setActiveAlbumId(albums[next].id);
   },[albums,snap]);
   const step=useCallback((direction:number)=>select(currentIndex.current+direction),[select]);
+  useEffect(()=>{
+    manager.setLoopMode(loopMode,()=>{
+      for(let offset=1;offset<=albums.length;offset++){
+        const next=(currentIndex.current+offset)%albums.length;
+        if(albums[next]?.tracks.some(track=>Boolean(track.audioUrl))){
+          if(next===currentIndex.current)return false;
+          select(next);
+          return true;
+        }
+      }
+      return false;
+    });
+    return()=>manager.setLoopMode("single");
+  },[loopMode,albums,select,manager]);
   const toggleInfo=useCallback(()=>setIsInfoOpen(open=>!open),[]);
   const dragStart=useCallback(()=>{animation.current?.stop();setIsInfoOpen(false);setIsTransitioning(true);},[]);
   const autoplayAttempted=useRef(false);
@@ -113,6 +128,11 @@ export function Gallery({mode="public"}:{mode?:ArchiveMode}) {
         <button className="space-icon-button" aria-label={state.status==="error"?"重试播放":isPlaying?"暂停音乐":"播放音乐"}
           onClick={()=>{if(state.status==="error")void manager.select(album).then(()=>manager.play());else if(isPlaying)manager.pause();else void manager.play();}}>
           {state.status==="loading"?<Loader2 size={19} className="space-spinner"/>:state.status==="error"?<RotateCcw size={19}/>:isPlaying?<Pause size={19}/>:<Play size={19}/>}
+        </button>
+        <button className="space-icon-button" title={loopMode==="single"?"单曲循环 · 点击切换列表循环":"列表循环 · 点击切换单曲循环"}
+          aria-label={loopMode==="single"?"当前单曲循环，切换为列表循环":"当前列表循环，切换为单曲循环"}
+          aria-pressed={loopMode==="list"} onClick={()=>setLoopMode(mode=>mode==="single"?"list":"single")}>
+          {loopMode==="single"?<Repeat1 size={19}/>:<Repeat size={19}/>}
         </button>
         <button className="space-icon-button" aria-label={isMuted?"取消静音":"静音"} aria-pressed={isMuted} onClick={()=>setIsMuted(value=>!value)}>
           {isMuted?<VolumeX size={19}/>:<Volume2 size={19}/>}

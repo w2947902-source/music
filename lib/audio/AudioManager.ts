@@ -42,6 +42,8 @@ export class AudioManager {
   private generation = 0;
   private frame?: number;
   private desiredPlaying = false;
+  private loopMode: "single" | "list" = "single";
+  private onClipEnd?: (trackId: string) => boolean;
   private context?: AudioContext;
   private disposed = false;
   private tick?: ReturnType<typeof setInterval>;
@@ -206,8 +208,20 @@ export class AudioManager {
         throw new Error("音乐片段无效，请在管理页重新选择。");
       audio.currentTime = voice.start;
       const prepared = voice;
+      let completed = false;
       const loop = () => {
+        if (completed || !this.desiredPlaying || this.active !== prepared || prepared.generation !== this.generation) return;
         if (audio.currentTime >= prepared.end || audio.ended) {
+          if (this.loopMode === "list" && this.onClipEnd) {
+            // timeupdate and ended can both arrive before React selects the next album.
+            completed = true;
+            if (this.onClipEnd(prepared.track.id)) {
+              audio.pause();
+              return;
+            }
+            // A collection with just one playable album still loops normally.
+            completed = false;
+          }
           audio.currentTime = prepared.start;
           if (this.desiredPlaying && this.active === prepared)
             void audio.play().catch(() =>
@@ -340,6 +354,10 @@ export class AudioManager {
     if (this.frame === undefined && this.active)
       this.setVoiceVolume(this.active, this.state.volume);
   }
+  setLoopMode(mode: "single" | "list", onClipEnd?: (trackId: string) => boolean) {
+    this.loopMode = mode;
+    this.onClipEnd = onClipEnd;
+  }
   seek(time: number) {
     if (!this.active || !Number.isFinite(time)) return;
     this.active.audio.currentTime = Math.max(
@@ -350,6 +368,7 @@ export class AudioManager {
   }
   dispose() {
     this.disposed = true;
+    this.onClipEnd = undefined;
     ++this.generation;
     if (this.frame !== undefined) cancelAnimationFrame(this.frame);
     if (this.tick) clearInterval(this.tick);

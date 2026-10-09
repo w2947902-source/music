@@ -32,7 +32,7 @@ export function AlbumView({
         <figcaption>
           <span>ARCHIVE NO. {String(number).padStart(3, "0")}</span>
           <span>
-            {album.tracks.length} TRACKS{album.year ? ` · ${album.year}` : ""}
+            MUSIC EXCERPT{album.year ? ` · ${album.year}` : ""}
           </span>
         </figcaption>
       </figure>

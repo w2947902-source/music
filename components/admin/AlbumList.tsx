@@ -63,7 +63,7 @@ function Row({
           <span className={`demo-badge ${album.published ? "published-badge" : ""}`}>{album.published ? "已发布" : "草稿"}</span>
         </h2>
         <p>
-          {album.artist} · {album.year ?? "—"} · {album.tracks.length} tracks
+          {album.artist} · {album.year ?? "—"} · {album.tracks[0]?.title ?? "暂无音乐片段"}
         </p>
       </div>
       <div className="admin-row-actions">

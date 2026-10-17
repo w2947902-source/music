@@ -52,7 +52,7 @@ async function embeddedCover(data: number[], format: string): Promise<File> {
 
 /** Read only embedded tags in the browser; the original song never leaves the device. */
 export async function readMp3Metadata(file: File): Promise<Mp3Metadata> {
-  const filename = file.name.replace(/\.mp3$/i, "").replace(/^\d+[\s._-]+/, "");
+  const filename = file.name.replace(/\.(mp3|wav|m4a|aac|flac|ogg|opus|webm|aif|aiff)$/i, "").replace(/^\d+[\s._-]+/, "");
   const parts = filename.split(/\s+[-–—]\s+/);
   const fallbackTitle = text(parts.length > 1 ? parts.slice(1).join(" - ") : filename) || "未命名歌曲";
   const fallback: Mp3Metadata = {
@@ -62,7 +62,7 @@ export async function readMp3Metadata(file: File): Promise<Mp3Metadata> {
   };
   try {
     const { default: MP3Tag } = await import("mp3tag.js");
-    const tags = await MP3Tag.readBlob(file, { mp4: false, aiff: false, aac: false, unsupported: false });
+    const tags = await MP3Tag.readBlob(file, { mp4: true, aiff: true, aac: true, unsupported: false });
     const result: Mp3Metadata = {
       title: text(tags.title) || fallback.title,
       album: text(tags.album) || text(tags.title) || fallback.album,

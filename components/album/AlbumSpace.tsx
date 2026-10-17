@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type RefObject, type PointerEvent as PointerInput, type MouseEvent } from "react";
 import { AnimatePresence, motion, useTransform, type MotionValue } from "motion/react";
+import { Play } from "lucide-react";
 import type { Album } from "@/types/album";
 import { acquireMediaUrl, releaseMediaUrl } from "@/lib/storage/mediaUrls";
 import { AlbumCover } from "./AlbumCover";
@@ -68,8 +69,8 @@ function useDragInput({position,albums,onSelect,onDragStart}:Navigation,vertical
     },
   };
 }
-function SpaceRecord({album,index,position,selected,isInfoOpen,onClick,reduced}:{
-  album:Album;index:number;position:MotionValue<number>;selected:boolean;isInfoOpen:boolean;onClick:()=>void;reduced:boolean;
+function SpaceRecord({album,index,position,selected,infoPage,onClick,reduced}:{
+  album:Album;index:number;position:MotionValue<number>;selected:boolean;infoPage:0|1|2;onClick:()=>void;reduced:boolean;
 }) {
   const distance=useTransform(position,value=>index-value);
   const transform=useTransform(distance,value=>{
@@ -81,30 +82,43 @@ function SpaceRecord({album,index,position,selected,isInfoOpen,onClick,reduced}:
   const filter=useTransform(distance,value=>`blur(${Math.min(7,Math.abs(value)*1.7)}px) brightness(${Math.max(.55,1-Math.abs(value)*.13)})`);
   const zIndex=useTransform(distance,value=>100-Math.round(Math.abs(value)*10));
   return <motion.div className="space-record" style={{transform,opacity,filter,zIndex}}>
-    <motion.button className="space-cover-button" type="button" aria-label={selected?`${isInfoOpen?"关闭":"查看"}${album.title}专辑信息`:`切换到 ${album.title}`} aria-expanded={selected?isInfoOpen:undefined}
+    <motion.button className="space-cover-button" type="button" aria-label={selected?infoPage===0?`查看 ${album.title} 专辑信息`:infoPage===1?"查看歌曲片段":"返回专辑封面":`切换到 ${album.title}`} aria-expanded={selected?infoPage!==0:undefined}
       tabIndex={selected?0:-1} onClick={onClick}
-      animate={{scale:selected&&isInfoOpen ? .9 : 1,z:selected&&isInfoOpen&&!reduced ? -70 : 0,filter:selected&&isInfoOpen ? "blur(9px) brightness(.66)" : "blur(0px) brightness(1)"}}
+      animate={{scale:selected?infoPage===2?.81:infoPage===1?.9:1:1,z:selected&&!reduced?infoPage===2?-145:infoPage===1?-70:0:0,
+        filter:selected&&infoPage!==0?infoPage===2?"blur(16px) brightness(.5)":"blur(9px) brightness(.66)":"blur(0px) brightness(1)"}}
       transition={{duration:reduced ? .12 : .52,ease:[.22,1,.36,1]}}>
       <AlbumCover source={album.coverUrl} title={album.title}/>
       <div className="space-reflection" aria-hidden="true"><AlbumCover source={album.coverUrl} title={album.title}/></div>
     </motion.button>
   </motion.div>;
 }
-export function AlbumCarousel(props:Navigation&{isInfoOpen:boolean;onInfo:()=>void;reduced:boolean}) {
+export function AlbumCarousel(props:Navigation&{infoPage:0|1|2;onInfo:()=>void;reduced:boolean;activeTrackId?:string;playing:boolean;onTrackSelect:(id:string)=>void}) {
   const container=useRef<HTMLDivElement>(null);useWheelInput(container,props.onStep,false);
   const drag=useDragInput(props,false),active=props.albums[props.activeAlbumIndex];
   return <div className="space-carousel" ref={container} {...drag} aria-label="专辑空间" aria-roledescription="轮播">
     <div className="space-orbit">
       {props.albums.map((album,index)=>Math.abs(index-props.activeAlbumIndex)<=5?
-        <SpaceRecord key={album.id} album={album} index={index} position={props.position} selected={index===props.activeAlbumIndex} isInfoOpen={props.isInfoOpen}
+        <SpaceRecord key={album.id} album={album} index={index} position={props.position} selected={index===props.activeAlbumIndex} infoPage={props.infoPage}
           reduced={props.reduced} onClick={()=>index===props.activeAlbumIndex?props.onInfo():props.onSelect(index)}/>:null)}
     </div>
-    <AnimatePresence>
-      {props.isInfoOpen&&active&&<div className="space-info-position" key={active.id}><motion.div className="space-album-info" role="dialog" aria-label="专辑信息"
-        initial={{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={{opacity:0,y:8}} transition={{duration:props.reduced ? .1 : .38,delay:.08}}>
-        <h1>{active.title}</h1><p>{active.artist}</p>
-      </motion.div></div>}
-    </AnimatePresence>
+    <div className="space-info-position"><AnimatePresence mode="wait">
+      {props.infoPage!==0&&active&&<motion.div key={`${active.id}:${props.infoPage}`} className={`space-album-info${props.infoPage===2?" space-tracks-panel":""}`} role="dialog" aria-label={props.infoPage===1?"专辑信息":"歌曲片段"}
+        initial={{opacity:0,y:14,filter:"blur(4px)"}} animate={{opacity:1,y:0,filter:"blur(0px)"}} exit={{opacity:0,y:-8,filter:"blur(4px)"}}
+        transition={{duration:props.reduced ? .1 : .28,ease:[.22,1,.36,1]}}
+        onPointerDown={props.infoPage===2?event=>event.stopPropagation():undefined} onClick={props.infoPage===2?props.onInfo:undefined}>
+        {props.infoPage===1?<><h1>{active.title}</h1><p>{active.artist}</p></>:<>
+          <motion.h2 className="space-song-title" key={props.activeTrackId??"empty"} initial={{opacity:0,y:7}} animate={{opacity:1,y:0}} transition={{duration:props.reduced?.1:.3}}>{active.tracks.find(track=>track.id===props.activeTrackId)?.title??active.tracks[0]?.title??"暂无音乐片段"}</motion.h2>
+          {active.tracks.length>1&&<div className="space-track-list" role="list" aria-label="选择歌曲片段">
+            {active.tracks.map((track,index)=><div role="listitem" key={track.id}><button type="button" disabled={!track.audioUrl}
+              className={`space-track-option${track.id===props.activeTrackId?" is-current":""}`} aria-label={`播放 ${track.title}`} aria-current={track.id===props.activeTrackId?"true":undefined}
+              onClick={event=>{event.stopPropagation();props.onTrackSelect(track.id);}}>
+              <span className="space-track-number">{track.id===props.activeTrackId&&props.playing?<span className="space-track-equalizer"><i/><i/><i/></span>:String(index+1).padStart(2,"0")}</span>
+              <span className="space-track-name">{track.title}</span><Play size={12} aria-hidden="true"/>
+            </button></div>)}
+          </div>}
+        </>}
+      </motion.div>}
+    </AnimatePresence></div>
   </div>;
 }
 function RailRecord({album,index,position,selected,onClick,open}:{album:Album;index:number;position:MotionValue<number>;selected:boolean;onClick:()=>void;open:boolean}) {
@@ -124,11 +138,13 @@ export function AlbumRail(props:Navigation&{open:boolean;onInfo:()=>void;reduced
         onClick={()=>index===props.activeAlbumIndex?props.onInfo():props.onSelect(index)}/>:null)}
   </motion.aside>;
 }
-export function AlbumBackdrop({album,reduced}:{album?:Album;reduced:boolean}) {
+export function AlbumBackdrop({album,reduced,instant=false}:{album?:Album;reduced:boolean;instant?:boolean}) {
   const [layers,setLayers]=useState<{key:number;source:string;url:string}[]>([]);
   const held=useRef(new Map<number,string>()),sequence=useRef(0);
+  const instantRef=useRef(instant);
+  useEffect(()=>{instantRef.current=instant;},[instant]);
   useEffect(()=>{
-    const source=album?.coverUrl;if(!source)return;
+    const source=album?.coverUrl;if(!source){setLayers([]);return;}
     let cancelled=false;const key=++sequence.current;
     void(async()=>{
       let acquired=false;
@@ -136,7 +152,7 @@ export function AlbumBackdrop({album,reduced}:{album?:Album;reduced:boolean}) {
         const url=await acquireMediaUrl(source);acquired=true;
         const image=new Image();image.src=url;await image.decode();
         if(cancelled){releaseMediaUrl(source);return;}
-        held.current.set(key,source);setLayers(previous=>[...previous.slice(-1),{key,source,url}]);
+        held.current.set(key,source);setLayers(previous=>instantRef.current?[{key,source,url}]:[...previous.slice(-1),{key,source,url}]);
       }catch{if(acquired)releaseMediaUrl(source);}
     })();
     return()=>{cancelled=true;};
@@ -151,7 +167,7 @@ export function AlbumBackdrop({album,reduced}:{album?:Album;reduced:boolean}) {
   },[]);
   return <div className="space-backdrop" aria-hidden="true">
     {layers.map(layer=><motion.img key={layer.key} src={layer.url} alt="" className="space-background-image"
-      initial={{opacity:0,scale:reduced?1:1.08}} animate={{opacity:1,scale:1}} transition={{duration:reduced ? .12 : .85,ease:"easeOut"}}
+      initial={{opacity:instant?1:0,scale:reduced||instant?1:1.08}} animate={{opacity:1,scale:1}} transition={{duration:instant?0:reduced ? .12 : .85,ease:"easeOut"}}
       onAnimationComplete={()=>setLayers(current=>current.at(-1)?.key===layer.key?current.slice(-1):current)}/>)}
     <div className="space-background-shade"/>
   </div>;

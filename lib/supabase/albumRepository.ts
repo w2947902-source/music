@@ -26,7 +26,7 @@ function toAlbum(row: AlbumRow & { tracks: TrackRow[] }, mode: ArchiveMode): Alb
   return {
     id: row.id, title: row.title, artist: row.artist, year: row.release_year ?? undefined,
     description: row.description, backgroundColor: row.background_color, coverUrl: cloudSource(row.cover_path, mode),
-    tracks: song ? [song] : [], order: row.display_order, published: row.published, updatedAt: row.updated_at,
+    tracks, order: row.display_order, published: row.published, updatedAt: row.updated_at,
     backgroundAudio: song?.audioUrl ? { trackId: song.id, start: 0, end: song.duration! } : undefined,
   };
 }

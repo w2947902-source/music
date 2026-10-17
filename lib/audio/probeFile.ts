@@ -2,7 +2,7 @@ export async function probeAudioFile(file: File): Promise<number> {
   const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (
     !file.type.startsWith("audio/") &&
-    !["mp3", "wav", "m4a", "aac", "ogg", "flac", "webm", "aiff"].includes(
+    !["mp3", "wav", "m4a", "aac", "ogg", "opus", "flac", "webm", "aif", "aiff"].includes(
       extension,
     )
   )

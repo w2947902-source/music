@@ -11,6 +11,7 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 import type { Album } from "@/types/album";
 import { AlbumEditor } from "./AlbumEditor";
 import { AlbumList } from "./AlbumList";
+import { FolderImport } from "./FolderImport";
 function DeleteConfirmation({
   album,
   onClose,
@@ -130,7 +131,7 @@ export function AdminPage() {
             THE ARCHIVE / BEHIND THE SLEEVE
           </span>
           <nav>
-            <button className="archive-link" onClick={() => void getSupabaseClient("admin").auth.signOut()}>退出登录</button>
+            <button className="archive-link" disabled={busy} onClick={() => void getSupabaseClient("admin").auth.signOut()}>退出登录</button>
             <Link href="/" className="archive-link">
               LISTENING ROOM
               <ArrowUpRight size={15} />
@@ -160,6 +161,8 @@ export function AdminPage() {
               Add Album
             </button>
           </div>
+          <FolderImport disabled={loading || Boolean(storageError) || busy || Boolean(editor) || Boolean(deleting)}
+            onBusyChange={setBusy} onImported={refresh}/>
           {storageError && (
             <p className="notice error" role="alert">
               {storageError} <button className="text-button" onClick={() => void refresh()}>重试</button>

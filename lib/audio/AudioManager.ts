@@ -230,7 +230,7 @@ export class AudioManager {
               audio.pause();
               return;
             }
-            // A collection with just one playable album still loops normally.
+            // A collection with just one playable excerpt still loops normally.
             completed = false;
           }
           audio.currentTime = prepared.start;
@@ -356,6 +356,19 @@ export class AudioManager {
         message: "点击页面或播放按钮即可开始播放。",
       });
     }
+  }
+  /** Unlock on a track-button gesture without briefly restarting the previous paused track. */
+  enablePlayback() {
+    if (this.disposed) return;
+    this.desiredPlaying = true;
+    this.publish({ playingIntent: true, autoplayBlocked: false });
+    try {
+      if (!this.context) {
+        this.context = new AudioContext();
+        this.voices.forEach(voice => this.connect(voice));
+      }
+      void this.context.resume().catch(() => {});
+    } catch { /* Native Audio remains available. */ }
   }
   pause() {
     this.desiredPlaying = false;

@@ -48,6 +48,8 @@ html:has(.listening-space), body:has(.listening-space) {
   touch-action: pan-y;
   cursor: grab;
 }
+.space-scene { position: absolute; inset: 0; isolation: isolate; }
+.space-scene.is-jumping { pointer-events: none; will-change: filter, opacity; }
 .space-carousel:active { cursor: grabbing; }
 .space-orbit {
   position: absolute;
@@ -134,6 +136,69 @@ html:has(.listening-space), body:has(.listening-space) {
   line-height: 1.4;
   color: #f2efeddf;
 }
+.space-tracks-panel { pointer-events: auto; cursor: pointer; }
+.space-song-title {
+  font-size: clamp(22px, 2.2vw, 36px);
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -.025em;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.space-track-list {
+  margin: 22px auto 0;
+  width: 100%;
+  max-width: 410px;
+  max-height: min(36vh, 260px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff30 transparent;
+  touch-action: pan-y;
+}
+.space-track-option {
+  display: flex;
+  width: 100%;
+  gap: 13px;
+  align-items: center;
+  padding: 11px 13px;
+  color: #fff9;
+  border-radius: 5px;
+  text-align: left;
+  font-size: clamp(12px, .95vw, 15px);
+  line-height: 1.45;
+  cursor: pointer;
+  transition: color .2s, background .2s;
+}
+.space-track-option:hover, .space-track-option:focus-visible { color: white; background: #ffffff12; }
+.space-track-option.is-current { color: white; background: #ffffff0e; }
+.space-track-option:disabled { opacity: .35; cursor: default; }
+.space-track-option > svg { flex-shrink: 0; opacity: 0; }
+.space-track-option:hover > svg, .space-track-option:focus-visible > svg { opacity: .75; }
+.space-track-number { width: 20px; flex-shrink: 0; color: #ffffff66; font-size: 11px; }
+.space-track-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.space-track-equalizer { height: 14px; display: flex; align-items: center; gap: 2px; }
+.space-track-equalizer i { display: block; width: 2px; height: 10px; background: #f6f3efb0; animation: space-equalize .8s ease-in-out infinite alternate; }
+.space-track-equalizer i:nth-child(2) { animation-delay: -.35s; }
+.space-track-equalizer i:nth-child(3) { animation-delay: -.6s; }
+@keyframes space-equalize { from { transform: scaleY(.35); } to { transform: scaleY(1); } }
+.space-range-navigation {
+  position: absolute;
+  z-index: 700;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(550px, 57vw);
+  height: 62px;
+  display: flex;
+  align-items: flex-end;
+  touch-action: manipulation;
+}
+.space-range-stop { flex: 1; min-width: 0; height: 100%; padding: 0; display: flex; align-items: flex-end; justify-content: center; cursor: pointer; border-radius: 4px; }
+.space-wave-bar { display: block; width: 2px; height: 10px; margin-bottom: 14px; border-radius: 2px; background: #f5f2e8; transform-origin: center bottom; pointer-events: none; }
+.space-range-stop:focus-visible { outline: 1px solid #ffffff40; outline-offset: 2px; }
 .space-rail {
   position: absolute;
   left: 0;
@@ -267,11 +332,16 @@ html:has(.listening-space), body:has(.listening-space) {
   .space-album-info { padding: 12px; }
   .space-album-info h1 { font-size: clamp(22px, 6vw, 30px); }
   .space-album-info p { font-size: 18px; margin-top: 12px; }
+  .space-song-title { font-size: clamp(20px, 5.6vw, 28px); -webkit-line-clamp: 2; }
+  .space-track-list { margin-top: 14px; max-height: min(29vh, 205px); }
+  .space-track-option { padding: 9px 7px; gap: 8px; }
+  .space-range-navigation { width: calc(100vw - 48px); bottom: max(66px, calc(env(safe-area-inset-bottom) + 52px)); height: 56px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .space-record, .space-rail-record { will-change: auto; }
   .space-reflection { display: none; }
   .space-spinner { animation-duration: 2s; }
+  .space-track-equalizer i { animation: none; }
 }
 
 

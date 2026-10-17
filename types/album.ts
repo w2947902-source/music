@@ -25,6 +25,8 @@ export interface Album {
   isDemo?: boolean;
   published?: boolean;
   updatedAt?: string;
+  /** Original cloud records represented by a grouped listening-room album. */
+  sourceAlbumIds?: string[];
 }
 export interface PendingAsset {
   id: string;
